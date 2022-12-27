@@ -3,5 +3,5 @@
 
 int main() {
   System system;
-  NCursesDisplay::Display(system, 20);
+  NCursesDisplay::Display(system);
 }

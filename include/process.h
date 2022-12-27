@@ -19,8 +19,8 @@ class Process {
 
  private:
   int pid_;
-  long ram_;
-  float cpuUtilization_;
+  long int ram_;
+  double cpuUtilization_;
   long int uptime_;
   std::string command_;
   std::string user_;

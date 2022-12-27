@@ -103,8 +103,12 @@ vector<int> LinuxParser::Pids() {
       // Is every character of the name a digit?
       string filename(file->d_name);
       if (std::all_of(filename.begin(), filename.end(), isdigit)) {
-        int pid = stoi(filename);
-        pids.push_back(pid);
+        try {
+          int pid = stoi(filename);
+          pids.emplace_back(pid);
+        } catch (...) {
+          // do nothing
+        }
       }
     }
   }
@@ -126,7 +130,8 @@ float LinuxParser::MemoryUtilization() {
 
 // Read and return the system uptime
 long LinuxParser::UpTime() {
-  long systemUptime = parseFile<long>(LinuxParser::kProcDirectory + LinuxParser::kUptimeFilename);
+  long systemUptime = parseFile<long>(LinuxParser::kProcDirectory +
+                                      LinuxParser::kUptimeFilename);
 
   return systemUptime;
 }
@@ -147,15 +152,17 @@ long LinuxParser::ActiveJiffies(int pid) {
     std::getline(stream, line);
     std::istringstream linestream(line);
     while (linestream >> value) {
-      jiffies.push_back(value);
+      jiffies.emplace_back(value);
     }
   }
   stream.close();
 
   long activeTime;
   try {
-    activeTime = std::stol(jiffies[13]) + std::stol(jiffies[14]) +
-                 std::stol(jiffies[15]) + std::stol(jiffies[16]);
+    if (jiffies.size() >= 16) {
+      activeTime = std::stol(jiffies[13]) + std::stol(jiffies[14]) +
+                   std::stol(jiffies[15]) + std::stol(jiffies[16]);
+    }
   } catch (...) {
     activeTime = 0;
   }
@@ -169,12 +176,14 @@ long LinuxParser::ActiveJiffies() {
 
   long activeTime;
   try {
-    activeTime = std::stol(jiffies[CPUStates::kUser_]) +
-                 std::stol(jiffies[CPUStates::kNice_]) +
-                 std::stol(jiffies[CPUStates::kSystem_]) +
-                 std::stol(jiffies[CPUStates::kIRQ_]) +
-                 std::stol(jiffies[CPUStates::kSoftIRQ_]) +
-                 std::stol(jiffies[CPUStates::kSteal_]);
+    if (jiffies.size() >= CPUStates::kSteal_) {
+      activeTime = std::stol(jiffies[CPUStates::kUser_]) +
+                   std::stol(jiffies[CPUStates::kNice_]) +
+                   std::stol(jiffies[CPUStates::kSystem_]) +
+                   std::stol(jiffies[CPUStates::kIRQ_]) +
+                   std::stol(jiffies[CPUStates::kSoftIRQ_]) +
+                   std::stol(jiffies[CPUStates::kSteal_]);
+    }
   } catch (...) {
     activeTime = 0;
   }
@@ -188,8 +197,10 @@ long LinuxParser::IdleJiffies() {
 
   long idleTime;
   try {
-    idleTime = std::stol(jiffies[CPUStates::kIdle_]) +
-               std::stol(jiffies[CPUStates::kIOwait_]);
+    if (jiffies.size() >= CPUStates::kIOwait_) {
+      idleTime = std::stol(jiffies[CPUStates::kIdle_]) +
+                 std::stol(jiffies[CPUStates::kIOwait_]);
+    }
   } catch (...) {
     idleTime = 0;
   }
@@ -209,7 +220,7 @@ vector<string> LinuxParser::CpuUtilization() {
     std::istringstream linestream(line);
     linestream >> cpu;
     while (linestream >> value) {
-      jiffies.push_back(value);
+      jiffies.emplace_back(value);
     }
   }
   stream.close();
@@ -239,18 +250,26 @@ int LinuxParser::RunningProcesses() {
 
 // Read and return the command associated with a process
 string LinuxParser::Command(int pid) {
-  string command  = parseFile<string>(LinuxParser::kProcDirectory + std::to_string(pid) + LinuxParser::kCmdlineFilename);
+  string command =
+      parseFile<string>(LinuxParser::kProcDirectory + std::to_string(pid) +
+                        LinuxParser::kCmdlineFilename);
 
   return command;
 }
 
 // Read and return the memory used by a process
 string LinuxParser::Ram(int pid) {
-  long mem = parseFile<long>("VmSize:", LinuxParser::kProcDirectory +
-                                            std::to_string(pid) +
-                                            LinuxParser::kStatusFilename);
-  mem /= 1000;
-  return std::to_string(mem);
+  string memory = parseFile<string>(
+      "VmSize:", LinuxParser::kProcDirectory + std::to_string(pid) +
+                     LinuxParser::kStatusFilename);
+  int scaledMem = 0;
+  try {
+    scaledMem = std::stoi(memory);
+    scaledMem /= 1024;
+  } catch (...) {
+    // scaledMem is initialized to zero, do nothing.
+  }
+  return std::to_string(scaledMem);
 }
 
 // Read and return the user ID associated with a process
@@ -290,20 +309,22 @@ string LinuxParser::User(int pid) {
 long LinuxParser::UpTime(int pid) {
   string line, value;
   vector<string> values;
-  long starttime = 0;
+  long starttime;
 
   std::ifstream stream(kProcDirectory + std::to_string(pid) + kStatFilename);
   if (stream.is_open()) {
     std::getline(stream, line);
     std::istringstream linestream(line);
     while (linestream >> value) {
-      values.push_back(value);
+      values.emplace_back(value);
     }
   }
   stream.close();
 
   try {
-    starttime = std::stol(values[21]) / sysconf(_SC_CLK_TCK);
+    if (values.size() >= 21) {
+      starttime = std::stol(values[21]) / sysconf(_SC_CLK_TCK);
+    }
   } catch (...) {
     starttime = 0;
   }
