@@ -1,8 +1,8 @@
 #include "format.h"
 
-#include <string>
-#include <sstream>
 #include <iomanip>
+#include <sstream>
+#include <string>
 
 using std::string;
 

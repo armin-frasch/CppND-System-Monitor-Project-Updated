@@ -16,6 +16,9 @@ float Processor::Utilization() {
 
   float totalDelta = float(total_new) - float(total_old);
   float idleDelta = float(idle_new) - float(idle_old);
-
-  return (totalDelta - idleDelta) / totalDelta;
+  if (totalDelta != 0) {
+    return (totalDelta - idleDelta) / totalDelta;
+  } else {
+    return 0;
+  }
 }
