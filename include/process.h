@@ -24,6 +24,7 @@ class Process {
   long int uptime_;
   std::string command_;
   std::string user_;
+  static constexpr size_t MAX_COMMAND_LENGTH{50};
 };
 
 #endif

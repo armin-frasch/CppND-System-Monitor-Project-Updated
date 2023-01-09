@@ -1,21 +1,18 @@
 #include "linux_parser.h"
 
+#include <ctype.h>
 #include <dirent.h>
 #include <unistd.h>
 
+#include <filesystem>
 #include <string>
 #include <vector>
-
-using std::stof;
-using std::string;
-using std::to_string;
-using std::vector;
 
 template <typename TValue>
 TValue parseFile(std::string key, std::string path) {
   TValue value;
   std::string foundKey;
-  string line;
+  std::string line;
 
   if (!(path.empty())) {
     std::ifstream stream(path);
@@ -52,12 +49,12 @@ TValue parseFile(std::string path) {
 }
 
 // An example of how to read data from the filesystem
-string LinuxParser::OperatingSystem() {
-  string line;
-  string key;
-  string value;
+std::string LinuxParser::OperatingSystem() {
+  std::string line;
+  std::string key;
+  std::string value;
 
-  std::ifstream filestream(kOSPath);
+  std::ifstream filestream(LinuxParser::kOSPath);
   if (filestream.is_open()) {
     while (std::getline(filestream, line)) {
       std::replace(line.begin(), line.end(), ' ', '_');
@@ -78,10 +75,11 @@ string LinuxParser::OperatingSystem() {
 }
 
 // An example of how to read data from the filesystem
-string LinuxParser::Kernel() {
-  string os, version, kernel;
-  string line;
-  std::ifstream stream(kProcDirectory + kVersionFilename);
+std::string LinuxParser::Kernel() {
+  std::string os, version, kernel;
+  std::string line;
+  std::ifstream stream(LinuxParser::kProcDirectory +
+                       LinuxParser::kVersionFilename);
   if (stream.is_open()) {
     std::getline(stream, line);
     std::istringstream linestream(line);
@@ -92,16 +90,14 @@ string LinuxParser::Kernel() {
   return kernel;
 }
 
-// BONUS: Update this to use std::filesystem
-vector<int> LinuxParser::Pids() {
-  vector<int> pids;
-  DIR* directory = opendir(kProcDirectory.c_str());
-  struct dirent* file;
-  while ((file = readdir(directory)) != nullptr) {
-    // Is this a directory?
-    if (file->d_type == DT_DIR) {
-      // Is every character of the name a digit?
-      string filename(file->d_name);
+// BONUS: Update this to use filesystem
+std::vector<int> LinuxParser::Pids() {
+  std::vector<int> pids;
+  const std::filesystem::path dir{LinuxParser::kProcDirectory};
+
+  for (auto const& dir_entry : std::filesystem::directory_iterator{dir}) {
+    if (dir_entry.is_directory()) {
+      std::string filename{dir_entry.path().filename()};
       if (std::all_of(filename.begin(), filename.end(), isdigit)) {
         try {
           int pid = stoi(filename);
@@ -112,18 +108,18 @@ vector<int> LinuxParser::Pids() {
       }
     }
   }
-  closedir(directory);
 
   return pids;
 }
 
 // Read and return the system memory utilization
 float LinuxParser::MemoryUtilization() {
-  float memTotal = parseFile<float>(
-      "MemTotal:", LinuxParser::kProcDirectory + LinuxParser::kMeminfoFilename);
+  float memTotal =
+      parseFile<float>(filterMemTotal, LinuxParser::kProcDirectory +
+                                           LinuxParser::kMeminfoFilename);
   float memFree =
-      parseFile<float>("MemAvailable:", LinuxParser::kProcDirectory +
-                                            LinuxParser::kMeminfoFilename);
+      parseFile<float>(filterMemAvailable, LinuxParser::kProcDirectory +
+                                               LinuxParser::kMeminfoFilename);
 
   return (memTotal - memFree) / memTotal;
 }
@@ -143,8 +139,8 @@ long LinuxParser::Jiffies() {
 
 // Read and return the number of active jiffies for a PID
 long LinuxParser::ActiveJiffies(int pid) {
-  string line, value;
-  vector<string> jiffies;
+  std::string line, value;
+  std::vector<std::string> jiffies;
 
   std::ifstream stream(LinuxParser::kProcDirectory + std::to_string(pid) +
                        LinuxParser::kStatFilename);
@@ -209,9 +205,9 @@ long LinuxParser::IdleJiffies() {
 }
 
 // Read and return CPU utilization
-vector<string> LinuxParser::CpuUtilization() {
-  string line, cpu, value;
-  vector<string> jiffies;
+std::vector<std::string> LinuxParser::CpuUtilization() {
+  std::string line, cpu, value;
+  std::vector<std::string> jiffies;
 
   std::ifstream stream(LinuxParser::kProcDirectory +
                        LinuxParser::kStatFilename);
@@ -232,8 +228,8 @@ vector<string> LinuxParser::CpuUtilization() {
 int LinuxParser::TotalProcesses() {
   int processes;
 
-  processes = parseFile<int>(
-      "processes", LinuxParser::kProcDirectory + LinuxParser::kStatFilename);
+  processes = parseFile<int>(filterProcesses, LinuxParser::kProcDirectory +
+                                                  LinuxParser::kStatFilename);
 
   return processes;
 }
@@ -242,29 +238,35 @@ int LinuxParser::TotalProcesses() {
 int LinuxParser::RunningProcesses() {
   int processes;
 
-  processes = parseFile<int>("procs_running", LinuxParser::kProcDirectory +
-                                                  LinuxParser::kStatFilename);
+  processes =
+      parseFile<int>(filterRunningProcesses,
+                     LinuxParser::kProcDirectory + LinuxParser::kStatFilename);
 
   return processes;
 }
 
 // Read and return the command associated with a process
-string LinuxParser::Command(int pid) {
-  string command =
-      parseFile<string>(LinuxParser::kProcDirectory + std::to_string(pid) +
-                        LinuxParser::kCmdlineFilename);
+std::string LinuxParser::Command(int pid) {
+  std::string command =
+      parseFile<std::string>(LinuxParser::kProcDirectory + std::to_string(pid) +
+                             LinuxParser::kCmdlineFilename);
 
   return command;
 }
 
 // Read and return the memory used by a process
-string LinuxParser::Ram(int pid) {
-  string memory = parseFile<string>(
-      "VmSize:", LinuxParser::kProcDirectory + std::to_string(pid) +
-                     LinuxParser::kStatusFilename);
+std::string LinuxParser::Ram(int pid) {
+  // The Keyword is changed from VmSize to VmRSS due to Udacitys review
+  // suggestion. The background is the fact, that VmSize gives the whole virtual
+  // memory which might exceed the actual available physical memory size. The
+  // physical memory is given by VmRSS. Given link by Reviewer:
+  // https://man7.org/linux/man-pages/man5/proc.5.html
+  std::string memory = parseFile<std::string>(
+      filterProcMem, LinuxParser::kProcDirectory + std::to_string(pid) +
+                         LinuxParser::kStatusFilename);
   int scaledMem = 0;
   try {
-    scaledMem = std::stoi(memory);
+    scaledMem = stoi(memory);
     scaledMem /= 1024;
   } catch (...) {
     // scaledMem is initialized to zero, do nothing.
@@ -273,19 +275,19 @@ string LinuxParser::Ram(int pid) {
 }
 
 // Read and return the user ID associated with a process
-string LinuxParser::Uid(int pid) {
-  string uid = parseFile<string>("Uid:", LinuxParser::kProcDirectory +
-                                             std::to_string(pid) +
-                                             LinuxParser::kStatusFilename);
+std::string LinuxParser::Uid(int pid) {
+  std::string uid = parseFile<std::string>(
+      filterUID, LinuxParser::kProcDirectory + std::to_string(pid) +
+                     LinuxParser::kStatusFilename);
 
   return uid;
 }
 
 // Read and return the user associated with a process
-string LinuxParser::User(int pid) {
-  string uid = Uid(pid);
-  string id, not_used, foundName, line;
-  string name;
+std::string LinuxParser::User(int pid) {
+  std::string uid = Uid(pid);
+  std::string id, not_used, foundName, line;
+  std::string name;
 
   std::ifstream stream(LinuxParser::kPasswordPath);
   if (stream.is_open()) {
@@ -307,8 +309,8 @@ string LinuxParser::User(int pid) {
 
 // Read and return the uptime of a process
 long LinuxParser::UpTime(int pid) {
-  string line, value;
-  vector<string> values;
+  std::string line, value;
+  std::vector<std::string> values;
   long starttime;
 
   std::ifstream stream(kProcDirectory + std::to_string(pid) + kStatFilename);

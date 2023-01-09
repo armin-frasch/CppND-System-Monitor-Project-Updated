@@ -18,6 +18,15 @@ const std::string kVersionFilename{"/version"};
 const std::string kOSPath{"/etc/os-release"};
 const std::string kPasswordPath{"/etc/passwd"};
 
+// parser keywords due to Udacity Review Suggestion
+const std::string filterProcesses("processes");
+const std::string filterRunningProcesses("procs_running");
+const std::string filterMemTotal("MemTotal:");
+const std::string filterMemAvailable("MemAvailable:");
+const std::string filterMemFree("MemFree:");
+const std::string filterUID("Uid:");
+const std::string filterProcMem("VmRSS:");
+
 // System
 float MemoryUtilization();
 long UpTime();

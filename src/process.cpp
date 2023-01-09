@@ -9,26 +9,28 @@
 
 #include "linux_parser.h"
 
-using std::string;
-using std::to_string;
-using std::vector;
+using namespace std;
 
 Process::Process(int pid) {
   pid_ = pid;
   command_ = LinuxParser::Command(pid_);
-  std::string ram = LinuxParser::Ram(pid_);
+  if (command_.length() > MAX_COMMAND_LENGTH) {
+    command_ = command_.substr(0, MAX_COMMAND_LENGTH) + "...";
+  }
+
+  string ram = LinuxParser::Ram(pid_);
   try {
-    ram_ = std::stol(ram);
+    ram_ = stol(ram);
   } catch (...) {
     ram_ = 0;
   }
-  uptime_ = LinuxParser::UpTime(pid_);
+
+  uptime_ = LinuxParser::UpTime() - LinuxParser::UpTime(pid_);
   user_ = LinuxParser::User(pid_);
 
-  double processIdletime = LinuxParser::UpTime() - uptime_;
   double processActivetime = LinuxParser::ActiveJiffies(pid_);
-  if (processIdletime != 0) {
-    cpuUtilization_ = processActivetime / processIdletime;
+  if (UpTime() != 0) {
+    cpuUtilization_ = processActivetime / UpTime();
   }
 }
 
@@ -42,12 +44,16 @@ float Process::CpuUtilization() const { return cpuUtilization_; }
 string Process::Command() const { return command_; }
 
 // Return this process's memory utilization
-string Process::Ram() const { return std::to_string(ram_); }
+string Process::Ram() const { return to_string(ram_); }
 
 // Return the user (name) that generated this process
 string Process::User() const { return user_; }
 
 // Return the age of this process (in seconds)
+// Due to the latest Udacity Review, the Process Constructor changed. The
+// Process::Uptime returns the time from System Update minus Process Starttime.
+// Link to Udacitys reference Doc:
+// https://man7.org/linux/man-pages/man5/proc.5.html
 long int Process::UpTime() const { return uptime_; }
 
 // Overload the "less than" comparison operator for Process objects
